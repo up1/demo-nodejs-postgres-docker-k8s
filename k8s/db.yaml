@@ -1,0 +1,80 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: postgres-db
+  labels:
+    app: postgres
+    tier: database
+spec:
+  volumes:
+  - name: postgres-data
+    hostPath:
+      path: /tmp # Path on the host node
+      type: DirectoryOrCreate
+  containers:
+  - name: postgres
+    image: postgres:18
+    ports:
+    - containerPort: 5432
+    env:
+    - name: POSTGRES_USER
+      valueFrom:
+        configMapKeyRef:
+          name: postgres-config
+          key: POSTGRES_USER
+    - name: POSTGRES_PASSWORD
+      valueFrom:
+        secretKeyRef:
+          name: postgres-secret
+          key: POSTGRES_PASSWORD
+    - name: POSTGRES_DB
+      valueFrom:
+        configMapKeyRef:
+          name: postgres-config
+          key: POSTGRES_DB
+    # volumeMounts:
+    # - name: postgres-data
+    #   mountPath: /var/lib/postgresql/data # Default data directory for PostgreSQL
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+    readinessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - pg_isready -U postgres -d appdb
+      initialDelaySeconds: 15
+      periodSeconds: 5
+    livenessProbe:
+      exec:
+        command:
+        - /bin/sh
+        - -c
+        - pg_isready -U postgres -d appdb
+      initialDelaySeconds: 30
+      periodSeconds: 10
+  restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: db
+  labels:
+    app: postgres
+    tier: database
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5432
+    targetPort: 5432
+    protocol: TCP
+  selector:
+    app: postgres
+    tier: database
